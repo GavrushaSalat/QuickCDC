@@ -1,12 +1,9 @@
-use std::io::{self, Read, Write, BufReader};
+use std::io::{self, Read, Write, BufReader, Cursor};
+const MIN_CHUNK_SIZE: usize = 1;
+const MAX_CHUNK_SIZE: usize = 90;
+const MASK: u32 = 0x0FF;
 
-// Parameters for the QuickCDC algorithm
-const MIN_CHUNK_SIZE: usize = 2048;
-const MAX_CHUNK_SIZE: usize = 8192;
-const MASK: u32 = 0x1FFF;
-
-fn rolling_hash(data: &[u8]) -> u32 //Rabin-Karp algorithm
-{
+fn rolling_hash(data: &[u8]) -> u32 {
     let mut hash = 0u32;
     for &byte in data {
         hash = hash.wrapping_mul(31).wrapping_add(byte as u32);
@@ -15,8 +12,7 @@ fn rolling_hash(data: &[u8]) -> u32 //Rabin-Karp algorithm
 }
 
 // QuickCDC algorithm implementation
-fn quickcdc <R: Read>(input: R, output: &mut dyn Write) -> io::Result<()>
-{
+fn quickcdc<R: Read>(input: R, output: &mut dyn Write) -> io::Result<()> {
     let mut reader = BufReader::new(input);
     let mut buffer = Vec::new();
     reader.read_to_end(&mut buffer)?;
@@ -45,4 +41,51 @@ fn quickcdc <R: Read>(input: R, output: &mut dyn Write) -> io::Result<()>
     }
 
     Ok(())
+}
+
+fn main() -> io::Result<()> {
+    let input_data = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque vehicula. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque vehicula. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque vehicula. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quisque vehicula.";
+
+    let input = Cursor::new(input_data);
+    let mut output = Vec::new();
+
+    quickcdc(input, &mut output)?;
+
+    println!("{}", String::from_utf8_lossy(&output));
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rolling_hash() {
+        let data = b"Hello, world!";
+        let hash = rolling_hash(data);
+        assert_eq!(hash, 2414922741);
+    }
+    #[test]
+    fn test_quickcdc() {
+        let input_data = b"ishd dshvl ";
+        let input = Cursor::new(input_data);
+        let mut output = Vec::new();
+
+        quickcdc(input, &mut output).unwrap();
+
+        let output_str = String::from_utf8_lossy(&output);
+        let chunks: Vec<&str> = output_str.split("\n---\n").collect();
+
+        // Проверка, что результат делится на несколько частей
+        assert!(chunks.len() > 1);
+
+        // Проверка, что все куски вместе дают исходные данные
+        let mut reconstructed = String::new();
+        for chunk in &chunks {
+            reconstructed.push_str(chunk);
+        }
+        reconstructed.truncate(reconstructed.len() - 1); // удалить последний '\n'
+        assert_eq!(reconstructed.as_bytes(), input_data);
+    }
 }
